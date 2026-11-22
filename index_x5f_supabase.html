@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking Torneo Escalera - Categoría Femenina | Padel Dudignac</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body{font-family:'Inter',sans-serif;background:#0f172a;color:#e2e8f0}
+        .glass-card{background:rgba(30,41,59,.6);backdrop-filter:blur(10px);border:1px solid rgba(51,65,85,.5)}
+        .btn-primary{background:#14b8a6;color:#fff}.btn-primary:hover{background:#0d9488}
+        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);justify-content:center;align-items:center;z-index:50}
+        .modal.active{display:flex}.hidden{display:none!important}
+        .toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:8px;color:#fff;z-index:100;transform:translateX(400px);transition:transform .3s}
+        .toast.show{transform:translateX(0)}.toast.success{background:#10b981}.toast.error{background:#ef4444}.toast.info{background:#3b82f6}
+        .loader{border:3px solid #334155;border-top:3px solid #14b8a6;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:40px auto}
+        @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="glass-card rounded-2xl p-6 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="text-center md:text-left">
+                    <h1 class="text-3xl md:text-4xl font-extrabold text-white mb-1 cursor-pointer" id="titleAdminTrigger">
+                        <i class="fas fa-trophy text-amber-400"></i> Ranking Torneo Escalera
+                    </h1>
+                    <p class="text-teal-400 font-semibold">Categoría Femenina • Padel Dudignac • En Vivo</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div id="statusIndicator" class="flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                        <span>Conectando...</span>
+                    </div>
+                    <button id="shareBtn" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold">
+                        <i class="fab fa-whatsapp mr-2"></i>Compartir
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div id="adminPanel" class="glass-card rounded-2xl p-4 mb-6 hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="px-3 py-1 bg-teal-500/20 text-teal-300 rounded-full text-sm font-semibold">
+                        <i class="fas fa-lock-open mr-1"></i> Modo Admin
+                    </span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="openPlayerModal()" class="btn-primary px-3 py-2 rounded-lg text-sm font-semibold">
+                        <i class="fas fa-plus mr-1"></i>Agregar
+                    </button>
+                    <button onclick="openPinModal()" class="px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-sm font-semibold">
+                        <i class="fas fa-key mr-1"></i>PIN
+                    </button>
+                    <button onclick="exportData()" class="px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-sm font-semibold">
+                        <i class="fas fa-download mr-1"></i>Exportar
+                    </button>
+                    <label class="px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-sm font-semibold cursor-pointer">
+                        <i class="fas fa-upload mr-1"></i>Importar
+                        <input type="file" id="importFile" class="hidden" accept=".json" onchange="importData(event)">
+                    </label>
+                    <button onclick="logout()" class="px-3 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-semibold">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Salir
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="glass-card rounded-xl p-5 text-center">
+                <div class="text-3xl font-extrabold text-teal-400" id="totalPlayers">0</div>
+                <div class="text-sm text-slate-400 mt-1">Jugadoras Inscriptas</div>
+            </div>
+            <div class="glass-card rounded-xl p-5 text-center">
+                <div class="text-3xl font-extrabold text-teal-400" id="totalMatches">0</div>
+                <div class="text-sm text-slate-400 mt-1">Partidos Jugados</div>
+            </div>
+            <div class="glass-card rounded-xl p-5 text-center">
+                <div class="text-3xl font-extrabold text-amber-400" id="topPlayer">-</div>
+                <div class="text-sm text-slate-400 mt-1">Líder Actual</div>
+            </div>
+        </div>
+
+        <div class="glass-card rounded-2xl overflow-hidden">
+            <div id="loadingState" class="p-12 text-center">
+                <div class="loader"></div>
+                <p class="text-slate-400">Cargando ranking desde la nube...</p>
+            </div>
+            <div id="tableContainer" class="hidden overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-slate-800">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase">Pos</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase">Jugadora</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase">PJ</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase">PG</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase">PP</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase">Pts</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase">Tend</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase admin-col hidden">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingBody" class="divide-y divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="glass-card rounded-2xl p-6 w-11/12 max-w-sm">
+            <h2 class="text-xl font-bold mb-4">Acceso Admin</h2>
+            <input type="password" id="pinInput" placeholder="PIN de administrador" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg mb-4 text-white" onkeypress="if(event.key==='Enter')login()">
+            <button onclick="login()" class="btn-primary w-full py-2 rounded-lg font-semibold">Entrar</button>
+            <button onclick="closeModal('loginModal')" class="w-full py-2 mt-2 bg-slate-700 rounded-lg">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Player Modal -->
+    <div id="playerModal" class="modal">
+        <div class="glass-card rounded-2xl p-6 w-11/12 max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="playerModalTitle">Nueva Jugadora</h2>
+            <input type="hidden" id="editPlayerId">
+            <div class="space-y-3">
+                <input type="text" id="playerName" placeholder="Nombre" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+                <input type="number" id="playerPoints" placeholder="Puntos" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+                <input type="number" id="playerPlayed" placeholder="Partidos Jugados" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+                <input type="number" id="playerWon" placeholder="Partidos Ganados" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+                <input type="number" id="playerLost" placeholder="Partidos Perdidos" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+                <select id="playerTrend" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+                    <option value="up">Subiendo ↑</option>
+                    <option value="down">Bajando ↓</option>
+                    <option value="same">Sin cambios →</option>
+                </select>
+                <input type="text" id="playerNote" placeholder="Nota (opcional)" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white">
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="savePlayer()" class="btn-primary flex-1 py-2 rounded-lg font-semibold">Guardar</button>
+                <button onclick="closeModal('playerModal')" class="flex-1 py-2 bg-slate-700 rounded-lg font-semibold">Cancelar</button>
+            </div>
+            <button onclick="deleteCurrentPlayer()" id="deletePlayerBtn" class="w-full py-2 mt-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold hidden">
+                <i class="fas fa-trash mr-2"></i>Eliminar Jugadora
+            </button>
+        </div>
+    </div>
+
+    <!-- PIN Modal -->
+    <div id="changePinModal" class="modal">
+        <div class="glass-card rounded-2xl p-6 w-11/12 max-w-sm">
+            <h2 class="text-xl font-bold mb-4">Cambiar PIN</h2>
+            <form onsubmit="saveNewPin(event)">
+                <input type="password" id="newPinInput" placeholder="Nuevo PIN (mín. 4 dígitos)" class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg mb-4 text-white" required minlength="4">
+                <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">Guardar PIN</button>
+                <button type="button" onclick="closeModal('changePinModal')" class="w-full py-2 mt-2 bg-slate-700 rounded-lg">Cancelar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="glass-card rounded-2xl p-6 w-11/12 max-w-sm">
+            <h2 class="text-xl font-bold mb-3" id="confirmTitle">Confirmar</h2>
+            <p class="text-slate-300 mb-6" id="confirmMessage"></p>
+            <div class="flex gap-2">
+                <button id="confirmYesBtn" class="btn-primary flex-1 py-2 rounded-lg font-semibold">Sí</button>
+                <button onclick="closeModal('confirmModal')" class="flex-1 py-2 bg-slate-700 rounded-lg font-semibold">No</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://htbvaqhealeftjhimpcz.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_bSZ0XPUojqz-tdFKMmravw_xfVdurhC';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        const STORAGE_KEY_PIN = 'padel_admin_pin_fem';
+        let adminPin = localStorage.getItem(STORAGE_KEY_PIN) || '1234';
+        let isAdmin = false;
+        let players = [];
+        let lastUpdated = null;
+
+        init();
+
+        async function init() {
+            await loadPlayers();
+            subscribeRealtime();
+            document.getElementById('titleAdminTrigger').addEventListener('dblclick', () => {
+                if (!isAdmin) openModal('loginModal');
+            });
+            document.getElementById('shareBtn').addEventListener('click', shareWhatsApp);
+        }
+
+        async function loadPlayers() {
+            try {
+                const { data, error } = await supabase
+                    .from('ranking_femenino')
+                    .select('*')
+                    .order('points', { ascending: false });
+                if (error) throw error;
+                players = data || [];
+                renderAll();
+                updateStatus(true);
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus(false);
+                showToast('Error al cargar: ' + error.message, 'error');
+                document.getElementById('loadingState').innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+            }
+        }
+
+        function subscribeRealtime() {
+            supabase.channel('ranking_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'ranking_femenino' }, () => {
+                    loadPlayers();
+                })
+                .subscribe();
+        }
+
+        function updateStatus(online) {
+            const el = document.getElementById('statusIndicator');
+            if (online) {
+                el.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span><span>En Vivo</span>';
+            } else {
+                el.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span><span>Sin conexión</span>';
+            }
+        }
+
+        function renderAll() {
+            renderStats();
+            renderTable();
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('tableContainer').classList.remove('hidden');
+        }
+
+        function renderStats() {
+            document.getElementById('totalPlayers').textContent = players.length;
+            const totalMatches = players.reduce((sum, p) => sum + (p.played || 0), 0);
+            document.getElementById('totalMatches').textContent = totalMatches;
+            document.getElementById('topPlayer').textContent = players[0]?.name || '-';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('rankingBody');
+            tbody.innerHTML = '';
+            players.forEach((p, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1;
+                const trendIcon = p.trend === 'up' ? '↑' : p.trend === 'down' ? '↓' : '→';
+                const trendColor = p.trend === 'up' ? 'text-green-400' : p.trend === 'down' ? 'text-red-400' : 'text-slate-400';
+                const row = `
+                    <tr class="hover:bg-slate-800/50">
+                        <td class="px-4 py-3 font-bold text-center">${medal}</td>
+                        <td class="px-4 py-3 font-semibold">${p.name}${p.note ? `<div class="text-xs text-slate-400">${p.note}</div>` : ''}</td>
+                        <td class="px-4 py-3 text-center">${p.played || 0}</td>
+                        <td class="px-4 py-3 text-center text-green-400">${p.won || 0}</td>
+                        <td class="px-4 py-3 text-center text-red-400">${p.lost || 0}</td>
+                        <td class="px-4 py-3 text-center font-bold text-teal-400">${p.points || 0}</td>
+                        <td class="px-4 py-3 text-center ${trendColor} font-bold">${trendIcon}</td>
+                        <td class="px-4 py-3 text-center admin-col ${isAdmin ? '' : 'hidden'}">
+                            <button onclick="openPlayerModal('${p.id}')" class="px-3 py-1 bg-teal-600 hover:bg-teal-500 rounded text-xs font-semibold">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+            document.querySelectorAll('.admin-col').forEach(el => {
+                if (isAdmin) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            });
+        }
+
+        function login() {
+            const pin = document.getElementById('pinInput').value;
+            if (pin === adminPin) {
+                isAdmin = true;
+                document.getElementById('adminPanel').classList.remove('hidden');
+                closeModal('loginModal');
+                renderTable();
+                showToast('Modo admin activado', 'success');
+            } else {
+                showToast('PIN incorrecto', 'error');
+            }
+        }
+
+        function logout() {
+            isAdmin = false;
+            document.getElementById('adminPanel').classList.add('hidden');
+            renderTable();
+            showToast('Sesión cerrada', 'info');
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        function openPlayerModal(id = null) {
+            document.getElementById('playerModalTitle').textContent = id ? 'Editar Jugadora' : 'Nueva Jugadora';
+            document.getElementById('deletePlayerBtn').classList.toggle('hidden', !id);
+            if (id) {
+                const p = players.find(x => x.id === id);
+                document.getElementById('editPlayerId').value = p.id;
+                document.getElementById('playerName').value = p.name;
+                document.getElementById('playerPoints').value = p.points || 0;
+                document.getElementById('playerPlayed').value = p.played || 0;
+                document.getElementById('playerWon').value = p.won || 0;
+                document.getElementById('playerLost').value = p.lost || 0;
+                document.getElementById('playerTrend').value = p.trend || 'up';
+                document.getElementById('playerNote').value = p.note || '';
+            } else {
+                document.getElementById('editPlayerId').value = '';
+                document.getElementById('playerName').value = '';
+                document.getElementById('playerPoints').value = 0;
+                document.getElementById('playerPlayed').value = 0;
+                document.getElementById('playerWon').value = 0;
+                document.getElementById('playerLost').value = 0;
+                document.getElementById('playerTrend').value = 'up';
+                document.getElementById('playerNote').value = '';
+            }
+            openModal('playerModal');
+        }
+
+        async function savePlayer() {
+            const id = document.getElementById('editPlayerId').value;
+            const playerData = {
+                name: document.getElementById('playerName').value.trim(),
+                points: parseInt(document.getElementById('playerPoints').value) || 0,
+                played: parseInt(document.getElementById('playerPlayed').value) || 0,
+                won: parseInt(document.getElementById('playerWon').value) || 0,
+                lost: parseInt(document.getElementById('playerLost').value) || 0,
+                trend: document.getElementById('playerTrend').value,
+                note: document.getElementById('playerNote').value.trim()
+            };
+            if (!playerData.name) return showToast('El nombre es obligatorio', 'error');
+            
+            try {
+                if (id) {
+                    const { error } = await supabase.from('ranking_femenino').update(playerData).eq('id', id);
+                    if (error) throw error;
+                    showToast('Jugadora actualizada', 'success');
+                } else {
+                    const { error } = await supabase.from('ranking_femenino').insert(playerData);
+                    if (error) throw error;
+                    showToast('Jugadora agregada', 'success');
+                }
+                closeModal('playerModal');
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+
+        function deleteCurrentPlayer() {
+            const id = document.getElementById('editPlayerId').value;
+            const player = players.find(p => p.id === id);
+            if (!player) return;
+            closeModal('playerModal');
+            openConfirmModal('Eliminar Jugadora', `¿Querés quitar a ${player.name} del ranking?`, async () => {
+                try {
+                    const { error } = await supabase.from('ranking_femenino').delete().eq('id', id);
+                    if (error) throw error;
+                    showToast(`${player.name} eliminada`, 'info');
+                } catch (error) {
+                    showToast('Error: ' + error.message, 'error');
+                }
+            });
+        }
+
+        function openPinModal() {
+            document.getElementById('newPinInput').value = '';
+            openModal('changePinModal');
+        }
+
+        function saveNewPin(e) {
+            e.preventDefault();
+            const newPin = document.getElementById('newPinInput').value.trim();
+            if (newPin.length >= 4) {
+                adminPin = newPin;
+                localStorage.setItem(STORAGE_KEY_PIN, adminPin);
+                closeModal('changePinModal');
+                showToast('PIN actualizado', 'success');
+            }
+        }
+
+        function exportData() {
+            const data = { tournament: 'Ranking Femenino', updatedAt: new Date().toISOString(), players: players };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ranking-femenino-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Respaldo descargado', 'success');
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed.players)) {
+                        const { error } = await supabase.from('ranking_femenino').upsert(parsed.players);
+                        if (error) throw error;
+                        showToast('Ranking importado', 'success');
+                    } else {
+                        showToast('Formato no válido', 'error');
+                    }
+                } catch (err) {
+                    showToast('Error al leer archivo', 'error');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function shareWhatsApp() {
+            const listText = players.map((p, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}°`;
+                return `${medal} *${p.name}* — ${p.points} pts`;
+            }).join('\n');
+            const text = `🎾 *RANKING TORNEO ESCALERA - FEMENINO*\n📍 *Padel Dudignac*\n\n${listText}\n\n📅 Actualizado: ${new Date().toLocaleDateString('es-AR')}`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            document.getElementById('confirmYesBtn').onclick = () => { onConfirm(); closeModal('confirmModal'); };
+            openModal('confirmModal');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
