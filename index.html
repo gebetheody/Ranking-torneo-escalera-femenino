@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking Torneo Escalera - Categoría Femenina | Padel Dudignac</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        court: {
+                            800: '#0f172a',
+                            900: '#090d16',
+                            950: '#04070d',
+                        },
+                        brand: {
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-slate-950">
+
+    <!-- Contenedor de notificaciones Toast -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+    <!-- Encabezado / Hero Banner -->
+    <header class="bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 border-b border-emerald-500/20 shadow-xl relative overflow-hidden">
+        <!-- Líneas decorativas de cancha de pádel -->
+        <div class="absolute inset-0 opacity-10 pointer-events-none">
+            <div class="border-2 border-emerald-400 rounded-3xl m-3 sm:m-5 h-[calc(100%-1.5rem)] sm:h-[calc(100%-2.5rem)] flex items-center justify-center">
+                <div class="w-full h-0.5 bg-emerald-400"></div>
+            </div>
+        </div>
+
+        <div class="max-w-4xl mx-auto px-4 py-6 sm:py-8 relative z-10">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-2">
+                        <i data-lucide="trophy" class="w-3.5 h-3.5 text-amber-400"></i>
+                        <span>Padel Dudignac • Oficial</span>
+                    </div>
+                    <h1 class="font-display text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+                        Ranking Torneo Escalera
+                    </h1>
+                    <p class="text-emerald-200/90 font-medium text-sm sm:text-base mt-1 flex items-center gap-2">
+                        <span id="liveDot" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Categoría Femenina • En Vivo</span>
+                    </p>
+                </div>
+
+                <!-- Botones de Acción Principales -->
+                <div class="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                    <button onclick="fetchPlayers(true)" class="inline-flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 border border-slate-600/70 active:scale-95 text-slate-200 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl backdrop-blur-sm transition-all cursor-pointer" title="Actualizar tabla">
+                        <i data-lucide="refresh-cw" id="refreshIcon" class="w-4 h-4 text-emerald-400"></i>
+                    </button>
+
+                    <button onclick="shareWhatsApp()" class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 text-xs sm:text-sm font-bold px-3.5 py-2.5 rounded-xl shadow-md shadow-emerald-950/50 transition-all cursor-pointer" title="Compartir resumen por WhatsApp">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        <span>Compartir</span>
+                    </button>
+
+                    <button id="adminToggleBtn" onclick="handleAdminToggle()" class="inline-flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700 border border-slate-600/70 active:scale-95 text-white text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl backdrop-blur-sm transition-all cursor-pointer">
+                        <i data-lucide="lock" id="adminLockIcon" class="w-4 h-4 text-amber-400"></i>
+                        <span id="adminBtnText">Modo Admin</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Barra de última actualización y búsqueda -->
+            <div class="mt-6 pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="text-xs text-slate-300 flex items-center gap-1.5">
+                    <i data-lucide="cloud-check" class="w-4 h-4 text-emerald-400"></i>
+                    <span>Sincronizado • Última act.: <strong id="lastUpdatedText" class="text-white">Cargando...</strong></span>
+                </div>
+                <div class="relative w-full sm:w-64">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" id="searchInput" oninput="renderRanking()" placeholder="Buscar jugadora..." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Panel de Control de Administrador (Oculto en vista pública) -->
+    <section id="adminPanel" class="bg-amber-950/40 border-b border-amber-500/30 shadow-inner hidden">
+        <div class="max-w-4xl mx-auto px-4 py-4">
+            <div class="flex flex-col gap-3">
+                <div class="flex items-start sm:items-center gap-3">
+                    <div class="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-sm shrink-0">
+                        <i data-lucide="shield-check" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-amber-200">Panel de Organizador Activo (Auto-Guardado en la Nube)</h2>
+                        <p class="text-xs text-amber-100/80">Tocá <strong>+5</strong> o <strong>-5</strong> junto al puntaje de cada jugadora (o editá su ficha) para que la tabla la ubique sola y se guarde en vivo.</p>
+                    </div>
+                </div>
+
+                <!-- Herramientas Admin -->
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                    <button onclick="openPlayerModal()" class="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition-all cursor-pointer">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                        <span>Agregar Jugadora</span>
+                    </button>
+
+                    <button onclick="manualSortByPoints()" class="inline-flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm transition-all cursor-pointer" title="Ordenar tabla por puntaje">
+                        <i data-lucide="arrow-down-wide-narrow" class="w-4 h-4"></i>
+                        <span>Ordenar por Puntos</span>
+                    </button>
+
+                    <button onclick="openPinModal()" class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-semibold px-3 py-2 rounded-xl shadow-sm transition-all cursor-pointer">
+                        <i data-lucide="key-round" class="w-4 h-4 text-amber-400"></i>
+                        <span>Clave PIN</span>
+                    </button>
+
+                    <button onclick="exportData()" class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-semibold px-3 py-2 rounded-xl shadow-sm transition-all cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Exportar JSON</span>
+                    </button>
+
+                    <button onclick="resetToDefaultConfirm()" class="inline-flex items-center gap-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-700/60 text-xs font-semibold px-3 py-2 rounded-xl transition-all cursor-pointer">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        <span>Reiniciar a 0</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-3 sm:px-4 py-6">
+
+        <!-- Tarjetas de Resumen Rápido -->
+        <div class="grid grid-cols-3 gap-2.5 sm:gap-4 mb-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] sm:text-xs font-semibold uppercase tracking-wider">
+                    <span>Inscriptas</span>
+                    <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+                <p class="font-display text-lg sm:text-2xl font-extrabold text-white mt-1">
+                    <span id="totalPlayersCount">14</span> <span class="text-xs sm:text-sm font-semibold text-slate-400">Jugadoras</span>
+                </p>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] sm:text-xs font-semibold uppercase tracking-wider">
+                    <span>Partidos</span>
+                    <i data-lucide="swords" class="w-4 h-4 text-sky-400"></i>
+                </div>
+                <p class="font-display text-lg sm:text-2xl font-extrabold text-white mt-1">
+                    <span id="totalMatchesCount">0</span> <span class="text-xs sm:text-sm font-semibold text-slate-400">PJ</span>
+                </p>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-[11px] sm:text-xs font-semibold uppercase tracking-wider">
+                    <span>Líder Actual</span>
+                    <i data-lucide="crown" class="w-4 h-4 text-amber-400"></i>
+                </div>
+                <p id="currentLeaderText" class="font-display text-sm sm:text-lg font-extrabold text-emerald-400 mt-1 truncate">Cargando...</p>
+            </div>
+        </div>
+
+        <!-- Podio Top 3 -->
+        <div id="podiumSection" class="grid grid-cols-3 gap-2 sm:gap-4 mb-6 items-end hidden"></div>
+
+        <!-- Leyenda de flechas -->
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3 px-1 text-xs text-slate-400">
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1"><i data-lucide="arrow-up" class="w-3.5 h-3.5 text-emerald-400"></i> Subió</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="arrow-down" class="w-3.5 h-3.5 text-rose-400"></i> Bajó</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="minus" class="w-3.5 h-3.5 text-slate-500"></i> Sin cambios</span>
+            </div>
+            <div class="text-slate-400 font-medium">
+                +5 pts por set ganado
+            </div>
+        </div>
+
+        <!-- Tabla / Lista del Ranking -->
+        <div class="bg-slate-900 rounded-2xl shadow-xl border border-slate-800 overflow-hidden">
+            <!-- Cabecera Desktop -->
+            <div class="hidden sm:grid sm:grid-cols-12 gap-2 bg-slate-800/80 border-b border-slate-700/80 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                <div class="col-span-2">Posición</div>
+                <div id="nameColHeader" class="col-span-4">Jugadora</div>
+                <div class="col-span-1 text-center" title="Partidos Jugados">PJ</div>
+                <div class="col-span-1 text-center text-emerald-400" title="Partidos Ganados">PG</div>
+                <div class="col-span-1 text-center text-rose-400" title="Partidos Perdidos">PP</div>
+                <div class="col-span-3 text-right">Puntos</div>
+            </div>
+
+            <!-- Estado de carga -->
+            <div id="loadingState" class="py-12 px-4 text-center">
+                <div class="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p class="text-slate-300 text-sm font-medium">Cargando posiciones desde la nube...</p>
+            </div>
+
+            <!-- Contenedor de Filas -->
+            <div id="rankingList" class="divide-y divide-slate-800/80"></div>
+
+            <!-- Estado vacío de búsqueda -->
+            <div id="emptyState" class="hidden py-12 px-4 text-center">
+                <div class="w-12 h-12 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="search-x" class="w-6 h-6"></i>
+                </div>
+                <p class="text-slate-300 font-medium">No se encontraron jugadoras con ese nombre.</p>
+                <button onclick="document.getElementById('searchInput').value=''; renderRanking();" class="mt-2 text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Limpiar búsqueda</button>
+            </div>
+        </div>
+
+        <!-- Reglamento Oficial del Torneo Escalera -->
+        <div class="mt-6 bg-slate-900 rounded-2xl p-4 sm:p-6 border border-slate-800 shadow-lg">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <i data-lucide="scroll-text" class="w-4 h-4"></i>
+                    </span>
+                    Reglamento del Torneo Escalera
+                </h3>
+                <span class="inline-flex items-center gap-1.5 self-start sm:self-auto px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-extrabold">
+                    <i data-lucide="award" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    +5 pts por cada set ganado
+                </span>
+            </div>
+
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
+                Cada partido de <strong class="text-white">Padel Dudignac</strong> se juega a <strong class="text-white">3 sets</strong>, rotando de compañera en cada set para que todas jueguen entre sí:
+            </p>
+
+            <!-- Tarjetas de Rotación de los 3 Sets -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-4">
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center sm:flex-col sm:items-start justify-between gap-1">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">1° Set</span>
+                    <p class="text-sm font-bold text-white sm:mt-1">A y B <span class="text-slate-500 font-medium mx-1">vs.</span> C y D</p>
+                </div>
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center sm:flex-col sm:items-start justify-between gap-1">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">2° Set</span>
+                    <p class="text-sm font-bold text-white sm:mt-1">A y C <span class="text-slate-500 font-medium mx-1">vs.</span> B y D</p>
+                </div>
+                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center sm:flex-col sm:items-start justify-between gap-1">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">3° Set</span>
+                    <p class="text-sm font-bold text-white sm:mt-1">A y D <span class="text-slate-500 font-medium mx-1">vs.</span> B y C</p>
+                </div>
+            </div>
+
+            <!-- Sistema de Puntuación -->
+            <div class="bg-gradient-to-r from-emerald-950/80 to-slate-950 border border-emerald-500/30 rounded-xl p-3.5 flex items-start sm:items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                    <i data-lucide="star" class="w-4 h-4"></i>
+                </div>
+                <p class="text-xs sm:text-sm text-slate-200 leading-snug">
+                    <strong class="text-white">Sistema de puntuación:</strong> Por cada set ganado, la pareja suma <strong class="text-emerald-400">5 puntos</strong> por jugadora en la tabla general.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Pie de página -->
+    <footer class="bg-slate-900/60 border-t border-slate-800 py-5 px-4 mt-8">
+        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+            <p class="font-semibold text-slate-300">Padel Dudignac • Categoría Femenina</p>
+            <p>Actualizado en tiempo real por la organización del torneo</p>
+        </div>
+    </footer>
+
+    <!-- MODAL 1: Ingreso PIN Administrador -->
+    <div id="pinLoginModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-700">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="lock" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white">Acceso Organizador</h3>
+                        <p class="text-xs text-slate-400">Ingresá tu clave PIN para editar</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('pinLoginModal')" class="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="submitPinLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Clave PIN de Administrador</label>
+                    <input type="password" id="pinInput" inputmode="numeric" maxlength="8" required placeholder="••••" class="w-full text-center tracking-widest text-xl font-bold bg-slate-950 text-white border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <p id="pinErrorMsg" class="hidden text-xs text-rose-400 font-medium mt-1.5 flex items-center gap-1">
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> PIN incorrecto. Intentá nuevamente.
+                    </p>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModal('pinLoginModal')" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 cursor-pointer">Cancelar</button>
+                    <button type="submit" class="flex-1 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold shadow-sm cursor-pointer">Ingresar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Agregar / Editar Jugadora -->
+    <div id="playerModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-700">
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="playerModalTitle" class="font-bold text-lg text-white">Editar Jugadora</h3>
+                <button onclick="closeModal('playerModal')" class="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="savePlayerForm(event)" class="space-y-4">
+                <input type="hidden" id="editPlayerId">
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre de la Jugadora</label>
+                    <input type="text" id="playerNameInput" required placeholder="Ej: Sofía F" class="w-full bg-slate-950 text-white border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Puntos</label>
+                        <input type="number" id="playerPointsInput" required min="0" step="5" class="w-full bg-slate-950 text-emerald-400 border border-slate-700 rounded-xl px-3.5 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Tendencia / Flecha</label>
+                        <select id="playerTrendInput" class="w-full bg-slate-950 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="same">● Sin cambios</option>
+                            <option value="up">▲ Subió de puesto</option>
+                            <option value="down">▼ Bajó de puesto</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1 text-center">Jugados (PJ)</label>
+                        <input type="number" id="playerPlayedInput" required min="0" class="w-full text-center bg-slate-900 text-white border border-slate-700 rounded-lg py-1.5 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-emerald-400 mb-1 text-center">Ganados (PG)</label>
+                        <input type="number" id="playerWonInput" required min="0" oninput="autoCalcPlayed()" class="w-full text-center bg-slate-900 text-emerald-400 border border-emerald-700/60 rounded-lg py-1.5 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-rose-400 mb-1 text-center">Perdidos (PP)</label>
+                        <input type="number" id="playerLostInput" required min="0" oninput="autoCalcPlayed()" class="w-full text-center bg-slate-900 text-rose-400 border border-rose-700/60 rounded-lg py-1.5 text-sm font-semibold">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nota opcional</label>
+                    <input type="text" id="playerNoteInput" placeholder="Ej: Invicta / Fecha 1" class="w-full bg-slate-950 text-white border border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+                    <button type="button" id="deletePlayerBtn" onclick="deleteCurrentPlayer()" class="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 px-3 py-2 rounded-xl transition-colors cursor-pointer">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <span>Eliminar</span>
+                    </button>
+                    <div class="flex gap-2 ml-auto">
+                        <button type="button" onclick="closeModal('playerModal')" class="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 cursor-pointer">Cancelar</button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold shadow-sm cursor-pointer">Guardar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Cambiar Clave PIN -->
+    <div id="changePinModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-700">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-white">Cambiar Clave PIN</h3>
+                <button onclick="closeModal('changePinModal')" class="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form onsubmit="saveNewPin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Nueva Clave PIN (4 a 8 dígitos)</label>
+                    <input type="text" id="newPinInput" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required placeholder="Ej: 1120" class="w-full text-center tracking-widest text-lg font-bold bg-slate-950 text-white border border-slate-700 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeModal('changePinModal')" class="flex-1 px-4 py-2 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 cursor-pointer">Cancelar</button>
+                    <button type="submit" class="flex-1 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold cursor-pointer">Actualizar PIN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 4: Confirmación Personalizada -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-700">
+            <div class="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mb-4">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            </div>
+            <h3 id="confirmTitle" class="font-bold text-lg text-white mb-1">¿Estás segura/o?</h3>
+            <p id="confirmMessage" class="text-sm text-slate-300 mb-5">Esta acción no se puede deshacer.</p>
+            <div class="flex gap-2">
+                <button onclick="closeModal('confirmModal')" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 cursor-pointer">Cancelar</button>
+                <button id="confirmActionBtn" class="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold shadow-sm cursor-pointer">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN DE SUPABASE (CATEGORÍA FEMENINA)
+        // ==========================================
+        const SUPABASE_URL = 'https://htbvaqhealeftjhimpcz.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_bSZ0XPUojqz-tdFKMmravw_xfVdurhC';
+        const TABLE_NAME = 'ranking_femenino';
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const STORAGE_KEY_PIN = 'padel_dudignac_femenino_pin_v2';
+
+        // Lista oficial exacta de las 14 jugadoras
+        const DEFAULT_PLAYERS = [
+            { "id": "p5", "name": "Flor G", "points": 40, "played": 0, "won": 0, "lost": 0, "trend": "up", "note": "" },
+            { "id": "p3", "name": "Paula G", "points": 30, "played": 0, "won": 0, "lost": 0, "trend": "up", "note": "" },
+            { "id": "p8", "name": "Juli F", "points": 25, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p14", "name": "Jime", "points": 25, "played": 0, "won": 0, "lost": 0, "trend": "up", "note": "" },
+            { "id": "p7", "name": "Alejandra G", "points": 20, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p4", "name": "Gisela", "points": 20, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p1", "name": "Adela", "points": 15, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p13", "name": "Fiama", "points": 15, "played": 0, "won": 0, "lost": 0, "trend": "up", "note": "" },
+            { "id": "p9", "name": "Alexandra", "points": 15, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p11", "name": "Debo", "points": 15, "played": 0, "won": 0, "lost": 0, "trend": "up", "note": "" },
+            { "id": "p10", "name": "Mariana A", "points": 10, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p2", "name": "Aldana", "points": 5, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p12", "name": "Noa", "points": 5, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" },
+            { "id": "p6", "name": "Adriana", "points": 0, "played": 0, "won": 0, "lost": 0, "trend": "down", "note": "" }
+        ];
+
+        // Estado global de la aplicación
+        let players = [];
+        let adminPin = localStorage.getItem(STORAGE_KEY_PIN) || '1120';
+        let isAdmin = false;
+        let lastUpdated = '';
+
+        // Inicializar al cargar el DOM
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (window.lucide) lucide.createIcons();
+            await fetchPlayers(false);
+            setupRealtime();
+        });
+
+        // Cargar jugadoras desde Supabase
+        async function fetchPlayers(showNotification = false) {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .order('points', { ascending: false })
+                    .order('won', { ascending: false })
+                    .order('name', { ascending: true });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    players = data;
+                    const latest = data.reduce((max, p) => {
+                        const d = p.updated_at ? new Date(p.updated_at) : new Date(0);
+                        return d > max ? d : max;
+                    }, new Date(0));
+
+                    lastUpdated = latest.getTime() > 0 ? formatDateObj(latest) : formatCurrentDate();
+                } else {
+                    players = JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
+                    lastUpdated = formatCurrentDate();
+                }
+
+                document.getElementById('loadingState').classList.add('hidden');
+                renderAll();
+
+                if (showNotification) {
+                    showToast('Tabla actualizada desde la nube', 'success');
+                }
+            } catch (err) {
+                console.error('Error cargando desde Supabase:', err);
+                players = JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
+                lastUpdated = formatCurrentDate();
+                document.getElementById('loadingState').classList.add('hidden');
+                renderAll();
+                showToast('Modo sin conexión (mostrando datos locales)', 'error');
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+            }
+        }
+
+        // Suscripción en tiempo real para que todas vean cambios al instante
+        function setupRealtime() {
+            supabaseClient
+                .channel('public:' + TABLE_NAME)
+                .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAME }, () => {
+                    fetchPlayers(false);
+                })
+                .subscribe();
+        }
+
+        // Guardar lista completa en Supabase
+        async function syncAllToSupabase() {
+            try {
+                const nowIso = new Date().toISOString();
+                const rows = players.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    points: Number(p.points) || 0,
+                    played: Number(p.played) || 0,
+                    won: Number(p.won) || 0,
+                    lost: Number(p.lost) || 0,
+                    trend: p.trend || 'same',
+                    note: p.note || '',
+                    updated_at: nowIso
+                }));
+
+                const { error } = await supabaseClient
+                    .from(TABLE_NAME)
+                    .upsert(rows, { onConflict: 'id' });
+
+                if (error) throw error;
+
+                lastUpdated = formatCurrentDate();
+                document.getElementById('lastUpdatedText').textContent = lastUpdated;
+            } catch (err) {
+                console.error('Error guardando en Supabase:', err);
+                showToast('Error al guardar cambios en la nube', 'error');
+            }
+        }
+
+        function formatCurrentDate() {
+            return formatDateObj(new Date());
+        }
+
+        function formatDateObj(dateObj) {
+            return dateObj.toLocaleDateString('es-AR', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) + ' hs';
+        }
+
+        // Renderizar toda la interfaz
+        function renderAll() {
+            document.getElementById('lastUpdatedText').textContent = lastUpdated;
+            document.getElementById('totalPlayersCount').textContent = players.length;
+
+            // Total de partidos jugados registrados
+            const totalPJ = players.reduce((acc, p) => acc + (Number(p.played) || 0), 0);
+            document.getElementById('totalMatchesCount').textContent = totalPJ;
+
+            // Líder actual
+            const leaderEl = document.getElementById('currentLeaderText');
+            if (players.length > 0 && players[0].points > 0) {
+                leaderEl.textContent = `${players[0].name} (${players[0].points} pts)`;
+            } else {
+                leaderEl.textContent = 'Empate en 0 pts';
+            }
+
+            renderPodium();
+            renderRanking();
+            updateAdminUI();
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }
+
+        // Renderizar Podio Top 3
+        function renderPodium() {
+            const podiumContainer = document.getElementById('podiumSection');
+            if (players.length < 3) {
+                podiumContainer.classList.add('hidden');
+                return;
+            }
+            podiumContainer.classList.remove('hidden');
+
+            // Orden visual del podio: 2° (Izquierda), 1° (Centro más alto), 3° (Derecha)
+            const podiumOrder = [
+                {
+                    player: players[1],
+                    rank: 2,
+                    badgeBg: 'bg-slate-200 text-slate-900 border-slate-300',
+                    cardStyle: 'bg-slate-900 border-slate-700 pt-4 pb-3',
+                    avatarStyle: 'bg-slate-800 text-slate-200 border border-slate-600'
+                },
+                {
+                    player: players[0],
+                    rank: 1,
+                    badgeBg: 'bg-amber-400 text-slate-950 border-amber-300',
+                    cardStyle: 'bg-gradient-to-b from-amber-500/15 to-slate-900 border-amber-400/60 ring-1 ring-amber-400/30 pt-6 pb-4',
+                    avatarStyle: 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                },
+                {
+                    player: players[2],
+                    rank: 3,
+                    badgeBg: 'bg-orange-300 text-slate-950 border-orange-200',
+                    cardStyle: 'bg-slate-900 border-orange-400/40 pt-3 pb-3',
+                    avatarStyle: 'bg-orange-500/20 text-orange-300 border border-orange-400/40'
+                }
+            ];
+
+            podiumContainer.innerHTML = podiumOrder.map(item => {
+                const initials = getInitials(item.player.name);
+                return `
+                    <div class="rounded-2xl border ${item.cardStyle} px-2 sm:px-4 text-center shadow-md flex flex-col items-center justify-between relative transition-all">
+                        <div class="absolute -top-3 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border shadow-sm ${item.badgeBg}">
+                            #${item.rank}
+                        </div>
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full ${item.avatarStyle} font-display font-extrabold text-sm sm:text-base flex items-center justify-center mb-1.5 mt-1">
+                            ${initials}
+                        </div>
+                        <h3 class="font-bold text-white text-xs sm:text-sm truncate w-full px-1" title="${escapeHtml(item.player.name)}">
+                            ${escapeHtml(item.player.name)}
+                        </h3>
+                        <div class="mt-1 inline-flex items-baseline gap-1 text-xs sm:text-sm font-extrabold text-emerald-400">
+                            <span>${item.player.points}</span>
+                            <span class="text-[10px] font-semibold text-slate-400 uppercase">pts</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Renderizar Lista Completa de Jugadoras
+        function renderRanking() {
+            const listContainer = document.getElementById('rankingList');
+            const emptyState = document.getElementById('emptyState');
+            const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+
+            const filtered = players
+                .map((player, index) => ({ ...player, rank: index + 1 }))
+                .filter(p => p.name.toLowerCase().includes(searchQuery));
+
+            if (filtered.length === 0 && players.length > 0) {
+                listContainer.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            listContainer.innerHTML = filtered.map((player) => {
+                const rankBadge = getRankBadge(player.rank);
+                const trendIcon = getTrendHtml(player.trend);
+                const rowHighlight = player.rank === 1
+                    ? 'bg-amber-500/5 hover:bg-amber-500/10'
+                    : (player.rank <= 3 ? 'bg-emerald-500/[0.03] hover:bg-slate-800/60' : 'hover:bg-slate-800/50');
+
+                return `
+                    <div class="p-3.5 sm:px-4 sm:py-3.5 transition-colors ${rowHighlight}">
+                        <div class="flex items-center justify-between sm:grid sm:grid-cols-12 sm:gap-2">
+                            
+                            <!-- Columna 1: Posición + Flecha de Tendencia -->
+                            <div class="flex items-center gap-2 sm:col-span-2 shrink-0">
+                                ${rankBadge}
+                                ${trendIcon}
+                            </div>
+
+                            <!-- Columna 2: Nombre de la Jugadora -->
+                            <div class="flex-1 min-w-0 px-3 sm:px-0 sm:col-span-4">
+                                <p class="font-bold text-white text-sm sm:text-base truncate">
+                                    ${escapeHtml(player.name)}
+                                </p>
+                                ${player.note ? `<p class="text-[11px] text-emerald-400 font-medium truncate">${escapeHtml(player.note)}</p>` : ''}
+                                <!-- Estadísticas en celular -->
+                                <div class="flex sm:hidden items-center gap-2.5 mt-1 text-[11px] text-slate-400 font-medium">
+                                    <span>PJ: <strong class="text-slate-200">${player.played}</strong></span>
+                                    <span class="text-emerald-400">PG: <strong>${player.won}</strong></span>
+                                    <span class="text-rose-400">PP: <strong>${player.lost}</strong></span>
+                                </div>
+                            </div>
+
+                            <!-- Columnas 3, 4 y 5: Estadísticas PJ, PG, PP (Desktop) -->
+                            <div class="hidden sm:block sm:col-span-1 text-center text-sm font-semibold text-slate-300">${player.played}</div>
+                            <div class="hidden sm:block sm:col-span-1 text-center text-sm font-bold text-emerald-400">${player.won}</div>
+                            <div class="hidden sm:block sm:col-span-1 text-center text-sm font-bold text-rose-400">${player.lost}</div>
+
+                            <!-- Columna 6: Puntos + Controles Rápidos en Modo Admin -->
+                            <div class="sm:col-span-3 flex items-center justify-end gap-1.5 shrink-0">
+                                ${isAdmin ? `
+                                    <button onclick="quickAdjustPoints('${player.id}', -5)" ${player.points <= 0 ? 'disabled' : ''} class="w-7 h-7 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-extrabold text-xs flex items-center justify-center disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer" title="Restar 5 puntos">-5</button>
+                                ` : ''}
+
+                                <span class="inline-flex items-baseline gap-1 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg font-display font-extrabold text-white text-sm sm:text-base">
+                                    ${player.points}
+                                    <span class="text-[10px] font-bold text-emerald-400 uppercase">pts</span>
+                                </span>
+
+                                ${isAdmin ? `
+                                    <button onclick="quickAdjustPoints('${player.id}', 5)" class="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-extrabold text-xs flex items-center justify-center transition-colors cursor-pointer" title="Sumar 5 puntos (1 set ganado)">+5</button>
+                                    <button onclick="openPlayerModal('${player.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition-colors cursor-pointer" title="Editar ficha de jugadora">
+                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }
+
+        // Insignia de Posición
+        function getRankBadge(rank) {
+            if (rank === 1) {
+                return `<span class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 text-slate-950 font-display font-extrabold text-sm flex items-center justify-center shadow-sm shrink-0">1°</span>`;
+            }
+            if (rank === 2) {
+                return `<span class="w-8 h-8 rounded-xl bg-gradient-to-br from-slate-200 to-slate-400 text-slate-950 font-display font-extrabold text-sm flex items-center justify-center shadow-sm shrink-0">2°</span>`;
+            }
+            if (rank === 3) {
+                return `<span class="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-300 to-orange-500 text-slate-950 font-display font-extrabold text-sm flex items-center justify-center shadow-sm shrink-0">3°</span>`;
+            }
+            return `<span class="w-8 h-8 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-display font-bold text-sm flex items-center justify-center shrink-0">${rank}°</span>`;
+        }
+
+        // Flecha de Tendencia
+        function getTrendHtml(trend) {
+            if (trend === 'up') {
+                return `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400" title="Subió de posición"><i data-lucide="arrow-up" class="w-3 h-3 stroke-[3]"></i></span>`;
+            }
+            if (trend === 'down') {
+                return `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/20 text-rose-400" title="Bajó de posición"><i data-lucide="arrow-down" class="w-3 h-3 stroke-[3]"></i></span>`;
+            }
+            return `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-800 text-slate-500" title="Sin cambios"><i data-lucide="minus" class="w-3 h-3 stroke-[2.5]"></i></span>`;
+        }
+
+        function getInitials(name) {
+            return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Alternar Modo Administrador (PIN: 1120)
+        function handleAdminToggle() {
+            if (isAdmin) {
+                isAdmin = false;
+                updateAdminUI();
+                renderRanking();
+                showToast('Vista pública activada', 'info');
+            } else {
+                document.getElementById('pinInput').value = '';
+                document.getElementById('pinErrorMsg').classList.add('hidden');
+                openModal('pinLoginModal');
+                setTimeout(() => document.getElementById('pinInput').focus(), 100);
+            }
+        }
+
+        function submitPinLogin(e) {
+            e.preventDefault();
+            const entered = document.getElementById('pinInput').value.trim();
+            if (entered === adminPin) {
+                isAdmin = true;
+                closeModal('pinLoginModal');
+                updateAdminUI();
+                renderRanking();
+                showToast('Modo Administrador desbloqueado', 'success');
+            } else {
+                document.getElementById('pinErrorMsg').classList.remove('hidden');
+                document.getElementById('pinInput').value = '';
+                document.getElementById('pinInput').focus();
+            }
+        }
+
+        function updateAdminUI() {
+            const adminPanel = document.getElementById('adminPanel');
+            const adminBtnText = document.getElementById('adminBtnText');
+            const adminLockIcon = document.getElementById('adminLockIcon');
+            const toggleBtn = document.getElementById('adminToggleBtn');
+
+            if (isAdmin) {
+                adminPanel.classList.remove('hidden');
+                adminBtnText.textContent = 'Vista Pública';
+                adminLockIcon.setAttribute('data-lucide', 'eye');
+                toggleBtn.classList.add('bg-amber-500/20', 'border-amber-400/60');
+            } else {
+                adminPanel.classList.add('hidden');
+                adminBtnText.textContent = 'Modo Admin';
+                adminLockIcon.setAttribute('data-lucide', 'lock');
+                toggleBtn.classList.remove('bg-amber-500/20', 'border-amber-400/60');
+            }
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }
+
+        // Ordenamiento automático de la tabla según puntos
+        function sortPlayersByPoints(focusPlayerId = null) {
+            const previousRanks = new Map();
+            players.forEach((p, idx) => previousRanks.set(p.id, idx));
+
+            // Ordenar de mayor a menor puntaje; en empate desempata por PG y luego conserva orden inicial
+            players.sort((a, b) => {
+                if (b.points !== a.points) {
+                    return b.points - a.points;
+                }
+                if (b.won !== a.won) {
+                    return b.won - a.won;
+                }
+                return previousRanks.get(a.id) - previousRanks.get(b.id);
+            });
+
+            // Actualizar flechas de tendencia automáticamente
+            players.forEach((p, newIdx) => {
+                const oldIdx = previousRanks.get(p.id);
+                if (newIdx < oldIdx) {
+                    p.trend = 'up';
+                } else if (newIdx > oldIdx) {
+                    p.trend = 'down';
+                }
+            });
+
+            if (focusPlayerId) {
+                const oldRank = previousRanks.get(focusPlayerId) + 1;
+                const newIndex = players.findIndex(p => p.id === focusPlayerId);
+                const newRank = newIndex + 1;
+                const player = players[newIndex];
+                if (player && newRank !== oldRank) {
+                    const arrow = newRank < oldRank ? '▲ Subió' : '▼ Bajó';
+                    return `${player.name}: ${player.points} pts (${arrow} al puesto #${newRank})`;
+                } else if (player) {
+                    return `${player.name}: ${player.points} pts (Puesto #${newRank})`;
+                }
+            }
+            return null;
+        }
+
+        // Ajuste rápido +5 / -5 puntos desde la tabla y guardado en Supabase
+        async function quickAdjustPoints(playerId, delta) {
+            if (!isAdmin) return;
+            const player = players.find(p => p.id === playerId);
+            if (!player) return;
+
+            player.points = Math.max(0, (Number(player.points) || 0) + delta);
+            const statusMsg = sortPlayersByPoints(playerId);
+            renderAll();
+            if (statusMsg) {
+                showToast(statusMsg, delta > 0 ? 'success' : 'info');
+            }
+            await syncAllToSupabase();
+        }
+
+        async function manualSortByPoints() {
+            if (!isAdmin) return;
+            sortPlayersByPoints();
+            renderAll();
+            await syncAllToSupabase();
+            showToast('Tabla ordenada y guardada en la nube', 'success');
+        }
+
+        // Modal Agregar / Editar Jugadora
+        function openPlayerModal(playerId = null) {
+            if (!isAdmin) return;
+            const titleEl = document.getElementById('playerModalTitle');
+            const deleteBtn = document.getElementById('deletePlayerBtn');
+
+            if (playerId) {
+                const player = players.find(p => p.id === playerId);
+                if (!player) return;
+
+                titleEl.textContent = 'Editar Jugadora';
+                document.getElementById('editPlayerId').value = player.id;
+                document.getElementById('playerNameInput').value = player.name;
+                document.getElementById('playerPointsInput').value = player.points;
+                document.getElementById('playerTrendInput').value = player.trend || 'same';
+                document.getElementById('playerPlayedInput').value = player.played;
+                document.getElementById('playerWonInput').value = player.won;
+                document.getElementById('playerLostInput').value = player.lost;
+                document.getElementById('playerNoteInput').value = player.note || '';
+                deleteBtn.classList.remove('hidden');
+            } else {
+                titleEl.textContent = 'Nueva Jugadora';
+                document.getElementById('editPlayerId').value = '';
+                document.getElementById('playerNameInput').value = '';
+                document.getElementById('playerPointsInput').value = 0;
+                document.getElementById('playerTrendInput').value = 'same';
+                document.getElementById('playerPlayedInput').value = 0;
+                document.getElementById('playerWonInput').value = 0;
+                document.getElementById('playerLostInput').value = 0;
+                document.getElementById('playerNoteInput').value = '';
+                deleteBtn.classList.add('hidden');
+            }
+
+            openModal('playerModal');
+            setTimeout(() => document.getElementById('playerNameInput').focus(), 100);
+        }
+
+        function autoCalcPlayed() {
+            const won = parseInt(document.getElementById('playerWonInput').value) || 0;
+            const lost = parseInt(document.getElementById('playerLostInput').value) || 0;
+            document.getElementById('playerPlayedInput').value = won + lost;
+        }
+
+        async function savePlayerForm(e) {
+            e.preventDefault();
+            const id = document.getElementById('editPlayerId').value;
+            const name = document.getElementById('playerNameInput').value.trim();
+            const points = Math.max(0, parseInt(document.getElementById('playerPointsInput').value) || 0);
+            const manualTrend = document.getElementById('playerTrendInput').value;
+            const played = Math.max(0, parseInt(document.getElementById('playerPlayedInput').value) || 0);
+            const won = Math.max(0, parseInt(document.getElementById('playerWonInput').value) || 0);
+            const lost = Math.max(0, parseInt(document.getElementById('playerLostInput').value) || 0);
+            const note = document.getElementById('playerNoteInput').value.trim();
+
+            if (!name) return;
+
+            let targetId = id;
+            if (id) {
+                const idx = players.findIndex(p => p.id === id);
+                if (idx !== -1) {
+                    players[idx] = { ...players[idx], name, points, trend: manualTrend, played, won, lost, note };
+                }
+            } else {
+                targetId = 'p_' + Date.now();
+                players.push({
+                    id: targetId,
+                    name,
+                    points,
+                    played,
+                    won,
+                    lost,
+                    trend: manualTrend,
+                    note
+                });
+            }
+
+            const rankMsg = sortPlayersByPoints(targetId);
+            closeModal('playerModal');
+            renderAll();
+            showToast(rankMsg || `${name} guardada en el ranking`, 'success');
+            await syncAllToSupabase();
+        }
+
+        function deleteCurrentPlayer() {
+            const id = document.getElementById('editPlayerId').value;
+            const player = players.find(p => p.id === id);
+            if (!player) return;
+
+            closeModal('playerModal');
+            openConfirmModal(
+                'Eliminar Jugadora',
+                `¿Querés quitar a ${player.name} del ranking?`,
+                async () => {
+                    players = players.filter(p => p.id !== id);
+                    renderAll();
+                    try {
+                        const { error } = await supabaseClient
+                            .from(TABLE_NAME)
+                            .delete()
+                            .eq('id', id);
+                        if (error) throw error;
+                        showToast(`${player.name} eliminada de la nube`, 'info');
+                    } catch (err) {
+                        console.error(err);
+                        showToast('Error al eliminar en Supabase', 'error');
+                    }
+                }
+            );
+        }
+
+        // Cambiar PIN
+        function openPinModal() {
+            document.getElementById('newPinInput').value = '';
+            openModal('changePinModal');
+        }
+
+        function saveNewPin(e) {
+            e.preventDefault();
+            const newPin = document.getElementById('newPinInput').value.trim();
+            if (newPin.length >= 4) {
+                adminPin = newPin;
+                localStorage.setItem(STORAGE_KEY_PIN, adminPin);
+                closeModal('changePinModal');
+                showToast('Clave PIN actualizada con éxito', 'success');
+            }
+        }
+
+        // Exportar Respaldo JSON
+        function exportData() {
+            const data = {
+                tournament: 'Ranking Torneo Escalera - Categoría Femenina (Padel Dudignac)',
+                updatedAt: lastUpdated,
+                players: players
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ranking-padel-femenino-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Respaldo JSON descargado', 'success');
+        }
+
+        // Reiniciar a las 14 jugadoras en 0
+        function resetToDefaultConfirm() {
+            openConfirmModal(
+                'Reiniciar Tabla a 0',
+                'Se restaurarán las 14 jugadoras iniciales con 0 puntos y 0 partidos en la nube. ¿Continuar?',
+                async () => {
+                    players = DEFAULT_PLAYERS.map(p => ({ ...p, points: 0, played: 0, won: 0, lost: 0, trend: 'same', note: '' }));
+                    renderAll();
+                    await syncAllToSupabase();
+                    showToast('Tabla reiniciada a 0 puntos en la nube', 'info');
+                }
+            );
+        }
+
+        // Compartir resumen por WhatsApp
+        function shareWhatsApp() {
+            const listText = players.map((p, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}°`;
+                return `${medal} *${p.name}* — ${p.points} pts`;
+            }).join('\n');
+
+            const text = `🎾 *RANKING TORNEO ESCALERA - FEMENINO*\n📍 *Padel Dudignac*\n\n${listText}\n\n📅 Actualizado: ${lastUpdated}`;
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
+        // Helpers de Modales y Notificaciones
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            const confirmBtn = document.getElementById('confirmActionBtn');
+            confirmBtn.onclick = () => {
+                closeModal('confirmModal');
+                onConfirm();
+            };
+            openModal('confirmModal');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const colors = {
+                success: 'bg-slate-900 text-white border-emerald-400',
+                error: 'bg-rose-950 text-white border-rose-500',
+                info: 'bg-slate-900 text-white border-sky-400'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl border border-slate-700 border-l-4 text-xs font-semibold transition-all duration-300 transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
